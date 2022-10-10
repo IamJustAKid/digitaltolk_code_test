@@ -582,6 +582,9 @@ class BookingRepository extends BaseRepository
      */
     public function isNeedToDelayPush($user_id)
     {
+        /*
+         * Send this code to Helper Class, or Create separate action class for re-usability
+         */
         if (!DateTimeHelper::isNightTime()) return false;
         $not_get_nighttime = TeHelper::getUsermeta($user_id, 'not_get_nighttime');
         if ($not_get_nighttime == 'yes') return true;
@@ -655,6 +658,12 @@ class BookingRepository extends BaseRepository
             $next_business_time = DateTimeHelper::getNextBusinessTimeString();
             $fields['send_after'] = $next_business_time;
         }
+
+        /*
+         * Send this code to Separate Class
+         * Only send process data to that class
+         */
+
         $fields = json_encode($fields);
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, "https://onesignal.com/api/v1/notifications");

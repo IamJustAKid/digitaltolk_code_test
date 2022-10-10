@@ -2,6 +2,7 @@
 
 namespace DTApi\Http\Controllers;
 
+use DTApi\Actions\GetUserJobs;
 use DTApi\Models\Job;
 use DTApi\Http\Requests;
 use DTApi\Models\Distance;
@@ -33,15 +34,27 @@ class BookingController extends Controller
      * @param Request $request
      * @return mixed
      */
-    public function index(Request $request)
+    public function index(Request $request, GetUserJobs $getUserJobs)
     {
+        /*
+         * Do not User Roles as Env.
+         * Keep them dynamic
+         * I use Silber/Boucner Package
+         * In Laravel, I can check Auth::user()->isAn('Admin)
+         */
+
         if($user_id = $request->get('user_id')) {
 
-            $response = $this->repository->getUsersJobs($user_id);
+            $response = $getUserJobs->execute($user_id);
 
         }
         elseif($request->__authenticatedUser->user_type == env('ADMIN_ROLE_ID') || $request->__authenticatedUser->user_type == env('SUPERADMIN_ROLE_ID'))
         {
+            /*
+             * It seems that Multiple filters have been implemented in Get All Jobs
+             * By Using the Criteria I can filter each of them easily.
+             * All of that 200 lines of code will come down to 10.
+             */
             $response = $this->repository->getAll($request);
         }
 
@@ -67,6 +80,7 @@ class BookingController extends Controller
     {
         $data = $request->all();
 
+        // Create SingleActionClass CreateBooking to process the data and store in database
         $response = $this->repository->store($request->__authenticatedUser, $data);
 
         return response($response);
@@ -82,6 +96,7 @@ class BookingController extends Controller
     {
         $data = $request->all();
         $cuser = $request->__authenticatedUser;
+        // Create SingleActionClass UpdateBooking to process the data and update the database
         $response = $this->repository->updateJob($id, array_except($data, ['_token', 'submit']), $cuser);
 
         return response($response);
@@ -96,6 +111,7 @@ class BookingController extends Controller
         $adminSenderEmail = config('app.adminemail');
         $data = $request->all();
 
+        // Create SingleActionClass SendJobEmail and create separate mailers. Call each class in hierarchy. This way any of these classes can be reused
         $response = $this->repository->storeJobEmail($data);
 
         return response($response);
@@ -108,7 +124,9 @@ class BookingController extends Controller
     public function getHistory(Request $request)
     {
         if($user_id = $request->get('user_id')) {
-
+            /*
+             * create a single action class to get user history by jobs
+             */
             $response = $this->repository->getUsersJobsHistory($user_id, $request);
             return response($response);
         }
@@ -125,6 +143,7 @@ class BookingController extends Controller
         $data = $request->all();
         $user = $request->__authenticatedUser;
 
+        // Create AcceptJob Class,
         $response = $this->repository->acceptJob($data, $user);
 
         return response($response);
@@ -240,6 +259,14 @@ class BookingController extends Controller
         } else {
             $admincomment = "";
         }
+
+        /*
+         * Bad way to do this.
+         * Create proper ActionClass, process the data and write proper logic
+         * Use Repository instead of Model Classes directly
+         *
+         */
+
         if ($time || $distance) {
 
             $affectedRows = Distance::where('job_id', '=', $jobid)->update(array('distance' => $distance, 'time' => $time));
@@ -267,6 +294,9 @@ class BookingController extends Controller
         $data = $request->all();
         $job = $this->repository->find($data['jobid']);
         $job_data = $this->repository->jobToData($job);
+        /*
+         * reuse Same Notification class used everywhere else
+         */
         $this->repository->sendNotificationTranslator($job, $job_data, '*');
 
         return response(['success' => 'Push sent']);
@@ -284,6 +314,7 @@ class BookingController extends Controller
         $job_data = $this->repository->jobToData($job);
 
         try {
+            // Create an Event Class to Send SMS Notification with Queue if required
             $this->repository->sendSMSNotificationToTranslator($job);
             return response(['success' => 'SMS sent']);
         } catch (\Exception $e) {

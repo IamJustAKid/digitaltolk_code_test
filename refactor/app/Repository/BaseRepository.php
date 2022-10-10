@@ -2,12 +2,20 @@
 
 namespace DTApi\Repository;
 
+// This is my Repository Design Pattern Package.
+use CollectiveConscious\RepositoryDesignPattern\Contracts\CriteriaInterface;
+use CollectiveConscious\RepositoryDesignPattern\Contracts\RepositoryCriteriaInterface;
+use CollectiveConscious\RepositoryDesignPattern\Contracts\RepositoryInterface;
+use CollectiveConscious\RepositoryDesignPattern\Exceptions\RepositoryException;
+
+use Illuminate\Support\Collection;
 use Validator;
 use Illuminate\Database\Eloquent\Model;
 use DTApi\Exceptions\ValidationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
-class BaseRepository
+//class BaseRepository
+abstract class BaseRepository implements RepositoryInterface, RepositoryCriteriaInterface
 {
 
     /**
@@ -202,4 +210,112 @@ class BaseRepository
         return true;
     }
 
+
+
+    /**
+     * Push Criteria for filter the query
+     *
+     * @param $criteria
+     *
+     * @return $this
+     * @throws RepositoryException
+     */
+    public function pushCriteria($criteria)
+    {
+        if (is_string($criteria)) {
+            $criteria = new $criteria;
+        }
+        if (!$criteria instanceof CriteriaInterface) {
+            throw new RepositoryException("Class " . get_class($criteria) . " must be an instance of CollectiveConscious\\RepositoryDesignPattern\\Contracts\\CriteriaInterface");
+        }
+        $this->criteria->push($criteria);
+        return $this;
+    }
+
+    /**
+     * Pop Criteria
+     *
+     * @param $criteria
+     *
+     * @return $this
+     */
+    public function popCriteria($criteria)
+    {
+        $this->criteria = $this->criteria->reject(function ($item) use ($criteria) {
+            if (is_object($item) && is_string($criteria)) {
+                return get_class($item) === $criteria;
+            }
+            if (is_string($item) && is_object($criteria)) {
+                return $item === get_class($criteria);
+            }
+            return get_class($item) === get_class($criteria);
+        });
+        return $this;
+    }
+
+    /**
+     * Get Collection of Criteria
+     *
+     * @return Collection
+     */
+    public function getCriteria()
+    {
+        return $this->criteria;
+    }
+
+    /**
+     * Find data by Criteria
+     *
+     * @param CriteriaInterface $criteria
+     *
+     * @return mixed
+     * @throws RepositoryException
+     */
+    public function getByCriteria(CriteriaInterface $criteria)
+    {
+        $this->model = $criteria->apply($this->model, $this);
+        $results = $this->model->get();
+        $this->resetModel();
+        return $this->parserResult($results);
+    }
+    /**
+     * Skip Criteria
+     *
+     * @param bool $status
+     *
+     * @return $this
+     */
+    public function skipCriteria($status = true)
+    {
+        $this->skipCriteria = $status;
+        return $this;
+    }
+    /**
+     * Reset all Criterias
+     *
+     * @return $this
+     */
+    public function resetCriteria()
+    {
+        $this->criteria = new Collection();
+        return $this;
+    }
+
+    /**
+     * Alias of All method
+     *
+     * @param array $columns
+     *
+     * @return mixed
+     * @throws RepositoryException
+     */
+    public function get($columns = ['*'])
+    {
+        return $this->all($columns);
+    }
+    public function orderBy($column, $direction = 'asc')
+    {
+        $this->model = $this->model->orderBy($column, $direction);
+        return $this;
+    }
 }
